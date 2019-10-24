@@ -1,0 +1,152 @@
+#!/usr/bin/env node
+
+const os = require(`os`)
+const fs = require(`fs`)
+const path = require(`path`)
+const http = require(`http`)
+const https = require(`https`)
+const { URL } = require(`url`)
+
+const connect = require(`connect`)
+const serveStatic = require(`serve-static`)
+const serveIndex = require(`serve-index`)
+const fallback = require(`connect-history-api-fallback`)
+const proxy = require(`http-proxy-middleware`)
+
+const debug = require(`debug`)
+debug.enable('lyserver')
+
+const exec = require(`child_process`).exec
+const spawn = require(`child_process`).spawn
+
+const argv = require(`minimist`)(process.argv.slice(2), {
+  alias: {
+    'silent': 's',
+    'port': 'p',
+    'hostname': 'h',
+    'dir': 'd',
+    'proxy': 'x',
+    'log': 'l',
+    'fallback': 'f'
+  },
+  string: [`port`, `hostname`, `fallback`],
+  boolean: [`silent`, `log`],
+  'default': {
+    'port': 8080,
+    'dir': process.cwd()
+  }
+})
+
+if (argv.help) {
+  console.log(`Usage:`)
+  console.log(`   lyserver --help  // print help information`)
+  console.log(`   lyserver  // 8080 as default prot, current folder as root`)
+  console.log(`   lyserver -p 8989 // 8989 as port`)
+  console.log(`   lyserver -s  // don't open browser`)
+  console.log(`   lyserver -h localhost // localhost as hostname`)
+  console.log(`   lyserver -d /home  // home as root`)
+  console.log(`   lyserver -l  // print log`)
+  console.log(`   lyserver -f  // Enable history fallback`)
+  console.log(`   lyserver -x http://localhost:7001/api  // support shorthand URL, config.js`)
+  process.exit(0)
+}
+
+const openURL = (url) => {
+  switch (process.platform) {
+    case "darwin":
+      exec(`open ${url}`)
+      break
+    case "win32":
+      exec(`start ${url}`)
+      break
+    default:
+      spawn('xdg-open', [url])
+  }
+}
+
+/**
+ * Get ip(v4) address
+ */
+
+const getIPAddress = () => {
+  let ifaces = os.networkInterfaces()
+  let ip = ''
+  for (let dev in ifaces) {
+    ifaces[dev].forEach(details => {
+      if (ip === '' && details.family === 'IPv4' && !details.internal) {
+        ip = details.address
+        return
+      }
+    })
+  }
+  return ip || `127.0.0.1`
+}
+
+const log = debug(`lyserver`)
+
+const app = connect()
+app.use((req, res, next) => {
+  res.setHeader('Access-Control-Allow-Origin', '*')
+  if (argv.log) {
+    log(`${req.method}  ${req.url}`)
+  }
+  next()
+})
+
+if (argv.fallback !== void 0) {
+  console.log(`Enable h5 history mode.`)
+  app.sue(fallback({
+    index: argv.fallback || '/index.html'
+  }))
+}
+app.use(serveStatic(argv.dir, { 'index': [`index.html`] }))
+app.use(serveIndex(argv.dir, { 'icons': true }))
+
+//  proxy
+
+if (argv.proxy) {
+  try {
+    let url = new URL(argv.proxy)
+    app.use(proxy(url.toString(), { changeOrigin: true }))
+  } catch (e) {
+    let config = require(path.resolve(argv.dir, argv.proxy))
+    try {
+      config = config.devServer.proxy
+    } catch (e) {
+      if (argv.log) {
+        log(e)
+      }
+    }
+    let context = Object.keys(config)
+    context.forEach(context => {
+      app.use(proxy(context, options))
+    })
+  }
+}
+
+// lyserver -option
+
+let port = parseInt(argv._[0] || argv.port, 10)
+let secure = port + 1
+
+let hostname = argv.hostname || getIPAddress()
+
+http.createServer(app).listen(port, () => {
+  port = (port != 80 ? `:${port}` : '')
+  let url = `http://${hostname}${port}/`
+  console.log(`Running at ${url}`)
+  if (!argv.silent) {
+    openURL(url)
+  }
+})
+
+let options = {
+  key: fs.readFileSync(path.join(__dirname, '../keys', 'key.pem')),
+  cert: fs.readFileSync(path.join(__dirname, '../keys', 'cert.pem'))
+}
+
+https.createServer(options, app).listen(secure, () => {
+  secure = (secure != 80 ? `:${secure}` : '')
+  let url = `https://${hostname}${secure}/`
+  console.log(`Also runnint at ${url}`)
+})

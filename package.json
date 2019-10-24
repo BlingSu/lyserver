@@ -1,0 +1,32 @@
+{
+  "name": "lyserver",
+  "version": "1.0.0",
+  "description": "Static server that can be debugged by mobile phone",
+  "bin": {
+    "lyserver": "./bin/lyserver"
+  },
+  "author": "angelasubi",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/angelasubi/lyserver.git"
+  },
+  "dependencies": {
+    "connect": "^3.6.6",
+    "connect-history-api-fallback": "^1.2.0",
+    "debug": "^2.2.0",
+    "http-proxy-middleware": "^0.19.1",
+    "minimist": "^1.2.0",
+    "serve-index": "^1.9.1",
+    "serve-static": "^1.13.2"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/angelasubi/lyserver/issues"
+  },
+  "homepage": "https://github.com/angelasubi/lyserver#readme"
+}
